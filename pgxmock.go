@@ -18,9 +18,9 @@ import (
 	"reflect"
 	"time"
 
-	pgx "github.com/jackc/pgx/v5"
-	pgconn "github.com/jackc/pgx/v5/pgconn"
-	pgxpool "github.com/jackc/pgx/v5/pgxpool"
+	"github.com/jackc/pgx/v5"
+	"github.com/jackc/pgx/v5/pgconn"
+	"github.com/jackc/pgx/v5/pgxpool"
 )
 
 // pgxMockIface interface serves to create expectations
@@ -110,6 +110,10 @@ type pgxMockIface interface {
 	Config() *pgx.ConnConfig
 
 	PgConn() *pgconn.PgConn
+
+	Acquire(ctx context.Context) (*pgxpool.Conn, error)
+	AcquireFunc(ctx context.Context, f func(*pgxpool.Conn) error) error
+	AcquireAllIdle(ctx context.Context) []*pgxpool.Conn
 }
 
 type pgxIface interface {
@@ -123,6 +127,9 @@ type pgxIface interface {
 	Prepare(context.Context, string, string) (*pgconn.StatementDescription, error)
 	Deallocate(ctx context.Context, name string) error
 	PgConn() *pgconn.PgConn
+	Acquire(ctx context.Context) (*pgxpool.Conn, error)
+	AcquireFunc(ctx context.Context, f func(*pgxpool.Conn) error) error
+	AcquireAllIdle(ctx context.Context) []*pgxpool.Conn
 }
 
 type PgxConnIface interface {
@@ -251,7 +258,7 @@ func (c *pgxmock) ExpectPrepare(expectedStmtName, expectedSQL string) *ExpectedP
 	return e
 }
 
-//endregion Expectations
+// endregion Expectations
 
 // NewRows allows Rows to be created from a
 // atring slice or from the CSV string and
@@ -266,6 +273,28 @@ func (c *pgxmock) NewRows(columns []string) *Rows {
 func (c *pgxmock) PgConn() *pgconn.PgConn {
 	p := pgconn.PgConn{}
 	return &p
+}
+
+func (c *pgxmock) Acquire(context.Context) (*pgxpool.Conn, error) {
+	p := pgxpool.Conn{}
+	return &p, nil
+}
+
+func (c *pgxmock) AcquireFunc(ctx context.Context, f func(*pgxpool.Conn) error) error {
+	conn, err := c.Acquire(ctx)
+	if err != nil {
+		return err
+	}
+	defer conn.Release()
+
+	return f(conn)
+}
+
+func (c *pgxmock) AcquireAllIdle(context.Context) []*pgxpool.Conn {
+	conns := make([]*pgxpool.Conn, 0, 1)
+	conns = append(conns, &pgxpool.Conn{})
+
+	return conns
 }
 
 // NewRowsWithColumnDefinition allows Rows to be created from a
